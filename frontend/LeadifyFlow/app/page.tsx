@@ -222,7 +222,15 @@ export default function Home() {
     const ranked = await rankingRes.json()
     setProcessStatus({ stage: ProcessStage.OutreachGeneration, progress: 0 })
     // 5. All leads are treated as speakers for now
-    const speakers = ranked.ranked.map((l: any) => ({
+    // Batch the outreach agent calls in groups of 20
+    function chunkArray<T>(arr: T[], size: number): T[][] {
+      const result: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        result.push(arr.slice(i, i + size));
+      }
+      return result;
+    }
+    const leadObjs = ranked.ranked.map((l: any) => ({
       name: l.profile.name || '',
       title: l.profile.title || '',
       company: l.profile.company || '',
@@ -230,11 +238,28 @@ export default function Home() {
       relevancyScore: (l.score ?? l.relevancyScore ?? 0) * 10, // score as percentage
       expertise: l.profile.expertise || [],
       linkedinUrl: l.profile.linkedin_url || l.profile.linkedinUrl || '',
-      draftMessage: l.draftMessage || l.explanation || '',
       description: l.profile.description || '',
       tags: l.profile.tags || [],
       explanation: l.explanation || '',
+      _raw: l // keep original for explanation
     }))
+    const leadChunks = chunkArray(leadObjs, 20)
+    let allDrafts: string[] = []
+    for (const chunk of leadChunks) {
+      try {
+        const outreachRes = await fetch('/api/outreach', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profiles: chunk, event_details: eventData }),
+        })
+        const outreachData = await outreachRes.json()
+        // outreachData should be { messages: string[] }
+        allDrafts = allDrafts.concat(outreachData.messages || [])
+      } catch (e) {
+        allDrafts = allDrafts.concat(chunk.map(l => l.explanation || ''))
+      }
+    }
+    const speakers = leadObjs.map((lead, i) => ({ ...lead, draftMessage: allDrafts[i] || lead.explanation || '' }))
     setLeads({ speakers, sponsors: [] })
     setProcessStatus({ stage: ProcessStage.Completed, progress: 100 })
     // Add results message and update journey stage

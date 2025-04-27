@@ -63,6 +63,19 @@ def strip_fences(text: str) -> str:
     text = re.sub(r"\n```$", "", text)
     return text.strip()
 
+def batch_profiles(profiles, batch_size=20):
+    for i in range(0, len(profiles), batch_size):
+        yield profiles[i:i+batch_size]
+
+def try_repair_json(raw):
+    last_bracket = raw.rfind(']')
+    if last_bracket != -1:
+        try:
+            return json.loads(raw[:last_bracket+1])
+        except Exception:
+            pass
+    return []
+
 # -----------------------------------------------------------------------------
 # Event Discovery
 # -----------------------------------------------------------------------------
@@ -132,7 +145,7 @@ Event details:
 Keywords:
 {json.dumps(keywords, indent=2)}
 
-Create 8-12 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find people. Make sure you use the keywords as a guide but think about what sort of people would be best for that sort of event. Do NOT use SQL or boolean logic like AND/OR. Make the queries sound like what a real person would search for, e.g.:
+Create 6-8 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find people. Make sure you use the keywords as a guide but think about what sort of people would be best for that sort of event. Do NOT use SQL or boolean logic like AND/OR. Make the queries sound like what a real person would search for, e.g.:
 - People working on AI at FAANG
 - People who started companies in Web3 or crypto
 - PhDs now working at FAANG companies
@@ -178,32 +191,59 @@ def dedupe_profiles(profiles):
 # Prompt Ranking with LLM
 # -----------------------------------------------------------------------------
 def rank_profiles_via_llm(profiles, event_details):
+    ranked_profile_schema = {
+        "type": "object",
+        "properties": {
+            "profile": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"},
+                    "name": {"type": "string"},
+                    "location": {"type": "string"},
+                    "headline": {"type": "string"},
+                    "description": {"type": "string"},
+                    "title": {"type": "string"},
+                    "profile_picture_url": {"type": "string"},
+                    "linkedin_url": {"type": "string"}
+                },
+                "required": ["id", "name"]
+            },
+            "score": {"type": "integer"},
+            "explanation": {"type": "string"}
+        },
+        "required": ["profile", "score", "explanation"]
+    }
     prompt = f"""
-You are an expert at ranking professionals based on their relevance to an event.
-Given the following event details:
+You are an expert at ranking professionals for event outreach. Given the event details and a list of LinkedIn profiles, score each profile from 1-10 for relevancy and provide a detailed explanation for each score. Consider location, experience, and likelihood to respond or be interested.
 
+Event details:
 {json.dumps(event_details, indent=2)}
 
-Rank the following profiles in terms of their relevance to this event. The profiles are as follows:
-
+Profiles:
 {json.dumps(profiles, indent=2)}
 
-Provide the rankings with scores for each profile based on their relevance.
+Return a JSON array of objects with keys: profile, score, explanation. Do not include markdown or code fences.
 """
     resp = client.models.generate_content(
         model="gemini-2.0-flash",
-        contents=[prompt]
+        contents=[prompt],
+        config={
+            "response_mime_type": "application/json",
+            "response_schema": [ranked_profile_schema],
+        }
     )
     raw = resp.text
     print("[Ranking] Raw response:\n", raw)
     try:
-        rankings = json.loads(strip_fences(raw))
+        ranked_profiles = json.loads(raw)
     except Exception as e:
         print(f"[Ranking] Error parsing response: {e}")
-        raise
-
-    print(f"[Ranking] Ranked {len(rankings)} profiles.")
-    return rankings
+        with open("ranking_raw_output.txt", "w") as f:
+            f.write(raw)
+        print("Raw output saved to ranking_raw_output.txt for inspection.")
+        return []
+    print(f"[Ranking] Ranked {len(ranked_profiles)} profiles.")
+    return ranked_profiles
 
 # -----------------------------------------------------------------------------
 # Event Relevance Description via LLM
@@ -313,37 +353,47 @@ def main():
         print("\nNo leads found.")
         return
 
-    # Step 5: Rank profiles using Gemini (with detailed explanation)
-    prompt = f"""
+    # Step 5: Rank profiles in batches using Gemini (with detailed explanation)
+    all_ranked = []
+    for batch in batch_profiles(deduped_leads, batch_size=20):
+        prompt = f"""
 You are an expert at ranking professionals for event outreach. Given the event details and a list of LinkedIn profiles, score each profile from 1-10 for relevancy and provide a detailed explanation for each score. Consider location, experience, and likelihood to respond or be interested.
 
 Event details:
 {json.dumps(details, indent=2)}
 
 Profiles:
-{json.dumps(deduped_leads, indent=2)}
+{json.dumps(batch, indent=2)}
 
-Return a JSON array of objects with keys: profile, score, explanation.
+Return a JSON array of objects with keys: profile, score, explanation. Do not include markdown or code fences. Do not output more than 30 results at a time.
 """
-    resp = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=[prompt]
-    )
-    raw = resp.text
-    print("[Ranking] Raw response:\n", raw)
-    try:
-        ranked_profiles = json.loads(strip_fences(raw))
-    except Exception as e:
-        print(f"[Ranking] Error parsing response: {e}")
-        raise
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash-preview-04-17",
+            contents=[prompt]
+        )
+        raw = resp.text
+        print("[Ranking] Raw response:\n", raw)
+        try:
+            ranked = json.loads(strip_fences(raw))
+        except Exception:
+            print("[Ranking] Error parsing response, attempting repair...")
+            ranked = try_repair_json(strip_fences(raw))
+            if not ranked:
+                print("[Ranking] Could not repair JSON, skipping batch.")
+                continue
+        all_ranked.extend(ranked)
+    if not all_ranked:
+        print("\nNo ranked leads found.")
+        return
 
-    # Step 6: Print up to 5 ranked leads with explanations
+    # Final pass: sort and print top 5
     print("\nTop leads:")
-    for i, lead in enumerate(sorted(ranked_profiles, key=lambda x: -x['score'])[:5], 1):
+    for i, lead in enumerate(sorted(all_ranked, key=lambda x: -x['score'])[:5], 1):
         p = lead['profile']
+        desc = p.get('description') or '[no bio]'
         print(f" {i}. {p.get('name', '[no name]')} — {p.get('headline', '[no headline]')}")
         print(f"     {p.get('linkedin_url', '[no url]')}")
-        print(f"     Bio: {p.get('description', '[no bio]')[:80]}...")
+        print(f"     Bio: {desc[:80]}...")
         print(f"     Score: {lead['score']}")
         print(f"     Explanation: {lead['explanation']}\n")
 

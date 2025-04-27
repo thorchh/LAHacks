@@ -1,0 +1,18 @@
+{
+    "gemini_agent": {
+        "identity_key": "d760040924c729097bc1c6504e473ca3a8cf2eff346902e26aac382b2e1ed711",
+        "wallet_key": "iOL6Mqj8PCgyqeQ6cFnh6e2yihYK1yQMaWYuRIDBXfI="
+    },
+    "linkd_agent": {
+        "identity_key": "255c719308612c62f5d33190931b540a3b82512c0758744795cf702b38c90671",
+        "wallet_key": "BrWEtOGlFqOUlIKEpPQAfBw4UH8QY6KTqtYMxqaSiJo="
+    },
+    "My First Agent": {
+        "identity_key": "291698f320cb8102791dd3fc4e17707e4b51c1df8159ac6d5de14a17af95fd51",
+        "wallet_key": "+LfXmguQd8MYnR/P5+WYECNtTEY7tUs+U3ioyrBLbZQ="
+    },
+    "My Second Agent": {
+        "identity_key": "0cc826bb0cfeb06c21c8340078fee1687d8c7c3836c16083669e667e9f369c76",
+        "wallet_key": "91PYCav7PtC/3yuA40LwDIEoSV6lpsLqstqvu6QO0Cc="
+    }
+}

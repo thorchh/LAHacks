@@ -221,27 +221,38 @@ export default function Home() {
     })
     const ranked = await rankingRes.json()
     setProcessStatus({ stage: ProcessStage.OutreachGeneration, progress: 0 })
-    // 5. Split into speakers/sponsors (if type field exists)
-    const speakers = ranked.ranked.filter((l: any) => l.profile.type === "speaker").map((l: any) => l.profile)
-    const sponsors = ranked.ranked.filter((l: any) => l.profile.type === "sponsor").map((l: any) => l.profile)
-    setLeads({ speakers, sponsors })
+    // 5. All leads are treated as speakers for now
+    const speakers = ranked.ranked.map((l: any) => ({
+      name: l.profile.name || '',
+      title: l.profile.title || '',
+      company: l.profile.company || '',
+      profileImage: l.profile.profile_picture_url || l.profile.profileImage || '/placeholder.svg',
+      relevancyScore: (l.score ?? l.relevancyScore ?? 0) * 10, // score as percentage
+      expertise: l.profile.expertise || [],
+      linkedinUrl: l.profile.linkedin_url || l.profile.linkedinUrl || '',
+      draftMessage: l.draftMessage || l.explanation || '',
+      description: l.profile.description || '',
+      tags: l.profile.tags || [],
+      explanation: l.explanation || '',
+    }))
+    setLeads({ speakers, sponsors: [] })
     setProcessStatus({ stage: ProcessStage.Completed, progress: 100 })
     // Add results message and update journey stage
     await simulateTyping(1000)
     addAssistantMessage(
-      `Great news! I've found some excellent matches for your event. I've identified ${speakers.length} potential speakers and ${sponsors.length} potential sponsors that align well with your event goals and audience.`,
+      `Great news! I've found some excellent matches for your event. I've identified ${speakers.length} potential speakers that align well with your event goals and audience.`,
       "results-summary",
     )
 
     await simulateTyping(1500)
     addAssistantMessage(
       <ResultsSummary
-        speakerCount={leads.speakers.length}
-        sponsorCount={leads.sponsors.length}
+        speakerCount={speakers.length}
+        sponsorCount={0}
         speakerRelevancy={90}
-        sponsorRelevancy={85}
+        sponsorRelevancy={0}
         topSpeakerExpertise={["AI Ethics", "Enterprise AI", "Machine Learning"]}
-        topSponsorExpertise={["AI Platforms", "Cloud Solutions", "Data Analytics"]}
+        topSponsorExpertise={[]}
       />,
       "results",
     )

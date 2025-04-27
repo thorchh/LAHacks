@@ -18,6 +18,10 @@ interface LeadGalleryProps {
 }
 
 export function LeadGallery({ leads }: LeadGalleryProps) {
+  // Defensive: always default to empty arrays if undefined
+  const speakers = leads.speakers || [];
+  const sponsors = leads.sponsors || [];
+
   const [activeTab, setActiveTab] = useState<string>("speakers")
   const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("relevancy")
@@ -25,13 +29,12 @@ export function LeadGallery({ leads }: LeadGalleryProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
 
   // Get all unique expertise areas
-  const getSpeakerExpertise = () => Array.from(new Set(leads.speakers.flatMap((speaker) => speaker.expertise))).sort()
-  const getSponsorExpertise = () => Array.from(new Set(leads.sponsors.flatMap((sponsor) => sponsor.expertise))).sort()
+  const getSpeakerExpertise = () => Array.from(new Set(speakers.flatMap((speaker) => speaker.expertise))).sort()
+  const getSponsorExpertise = () => Array.from(new Set(sponsors.flatMap((sponsor) => sponsor.expertise))).sort()
 
   // Filter and sort leads
   const getFilteredLeads = (leadType: "speakers" | "sponsors") => {
-    const leadList = leads[leadType]
-    const expertiseList = leadType === "speakers" ? getSpeakerExpertise() : getSponsorExpertise()
+    const leadList = leadType === "speakers" ? speakers : sponsors;
 
     return leadList
       .filter((lead) => {

@@ -27,7 +27,7 @@ agent = Agent(
 @agent.on_message(model=QueriesRequest, replies=QueriesResponse)
 async def handle_queries(ctx: Context, sender: str, msg: QueriesRequest):
     prompt = f"""
-You are an expert in creating diverse natural language search queries for people discovery on search engines and LinkedIn. Given the following event details and related keywords:
+You are an expert in creating diverse natural language search queries for people discovery on Linkd a natural language people finder. It only works with natural language. Given the following event details and related keywords:
 
 Event details:
 {json.dumps(msg.event_details, indent=2)}
@@ -59,21 +59,17 @@ Event details:
 Keywords:
 {json.dumps(req.keywords, indent=2)}
 
-Create 6-8 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find high-caliber people. Make the queries sound like what a real event organizer would search for to find top speakers or panelists.
+Create 6-8 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find high-caliber people. Make the queries sound like what a real event organizer would want to have as their top speakers or panelists.
 
 Here are some examples of excellent queries:
 - "AI research lead at top tech company"
 - "Founder of successful Web3 startup"
 - "PhD in computer science working at Google or Meta"
-- "Venture capital partner investing in climate tech"
-- "Autonomous vehicle engineer with published patents"
-- "Biotech entrepreneur in San Francisco Bay Area"
-- "Award-winning science communicator and author"
-- "Healthcare AI startup CEO in California"
+
 
 Now, create the best possible queries for this event:
 """
-    resp = client.models.generate_content(model="gemini-2.0-flash", contents=[prompt])
+    resp = client.models.generate_content(model="gemini-2.5-flash-preview-04-17", contents=[prompt])
     queries = json.loads(strip_fences(resp.text))
     return QueriesResponse(queries=queries)
 

@@ -34,6 +34,10 @@ def get_queries(event_details, keywords):
 
 def get_profiles(queries):
     all_profiles = []
+    # Set this to True to only use the first query, or False to use all queries
+    ONLY_FIRST_QUERY = True  # <-- Set to True to only process the first query
+    if ONLY_FIRST_QUERY:
+        queries = queries[:1]
     for i, query in enumerate(queries):
         print(f"[Linkd] Sending query {i+1}/{len(queries)}: {query}")
         resp = requests.post(LINKD_URL, json={"query": query})

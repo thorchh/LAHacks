@@ -162,7 +162,7 @@ export function LeadCard({ lead, type, view = "grid" }: LeadCardProps) {
               </div>
 
               <div className="flex flex-wrap gap-2 mb-3">
-                {lead.expertise.map((skill, index) => (
+                {(lead.expertise ?? []).map((skill, index) => (
                   <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                     {skill}
                   </Badge>

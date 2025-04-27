@@ -19,7 +19,7 @@ import {
   type Goals,
   type Leads,
 } from "@/lib/types"
-import { mockEventData, mockLeads, mockAudience, mockGoals } from "@/lib/mock-data"
+import { mockEventData, mockAudience, mockGoals } from "@/lib/mock-data"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function Home() {
@@ -35,7 +35,7 @@ export default function Home() {
   const [eventData, setEventData] = useState<EventData>(mockEventData)
   const [audience, setAudience] = useState<Audience>(mockAudience)
   const [goals, setGoals] = useState<Goals>(mockGoals)
-  const [leads, setLeads] = useState<Leads>(mockLeads)
+  const [leads, setLeads] = useState<Leads>({ speakers: [], sponsors: [] })
   const [messages, setMessages] = useState<Message[]>([])
   const [inputMessage, setInputMessage] = useState("")
   const [isTyping, setIsTyping] = useState(false)
@@ -186,32 +186,50 @@ export default function Home() {
     }
   }
 
-  // Simulate the processing of finding leads
+  // Simulate the processing of finding leads (now uses real orchestrator data)
   const simulateProcessing = async () => {
-    const stages = [
-      ProcessStage.KeywordExtraction,
-      ProcessStage.QueryGeneration,
-      ProcessStage.ProfileSearch,
-      ProcessStage.ProfileRanking,
-      ProcessStage.OutreachGeneration,
-    ]
-
-    for (const stage of stages) {
-      setProcessStatus({ stage, progress: 0 })
-
-      // Simulate progress within each stage
-      for (let progress = 0; progress <= 100; progress += 5) {
-        setProcessStatus({ stage, progress })
-        await new Promise((resolve) => setTimeout(resolve, 80))
-      }
-    }
-
+    setProcessStatus({ stage: ProcessStage.KeywordExtraction, progress: 0 })
+    // 1. Get keywords
+    const keywordsRes = await fetch("/api/keywords", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_details: eventData }),
+    })
+    const keywords = await keywordsRes.json()
+    setProcessStatus({ stage: ProcessStage.QueryGeneration, progress: 0 })
+    // 2. Get queries
+    const queriesRes = await fetch("/api/queries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_details: eventData, keywords }),
+    })
+    const queries = await queriesRes.json()
+    setProcessStatus({ stage: ProcessStage.ProfileSearch, progress: 0 })
+    // 3. Get profiles
+    const linkdRes = await fetch("/api/linkd", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queries: queries.queries }),
+    })
+    const profiles = await linkdRes.json()
+    setProcessStatus({ stage: ProcessStage.ProfileRanking, progress: 0 })
+    // 4. Get ranking
+    const rankingRes = await fetch("/api/ranking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profiles: profiles.profiles, event_details: eventData }),
+    })
+    const ranked = await rankingRes.json()
+    setProcessStatus({ stage: ProcessStage.OutreachGeneration, progress: 0 })
+    // 5. Split into speakers/sponsors (if type field exists)
+    const speakers = ranked.ranked.filter((l: any) => l.profile.type === "speaker").map((l: any) => l.profile)
+    const sponsors = ranked.ranked.filter((l: any) => l.profile.type === "sponsor").map((l: any) => l.profile)
+    setLeads({ speakers, sponsors })
     setProcessStatus({ stage: ProcessStage.Completed, progress: 100 })
-
     // Add results message and update journey stage
     await simulateTyping(1000)
     addAssistantMessage(
-      "Great news! I've found some excellent matches for your event. I've identified 4 potential speakers and 4 potential sponsors that align well with your event goals and audience.",
+      `Great news! I've found some excellent matches for your event. I've identified ${speakers.length} potential speakers and ${sponsors.length} potential sponsors that align well with your event goals and audience.`,
       "results-summary",
     )
 

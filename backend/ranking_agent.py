@@ -1,6 +1,7 @@
 from uagents import Agent, Context, Model, Field
 import json, re
 from google import genai
+import logging
 
 GEMINI_API_KEY = "AIzaSyDOKIJlSe93VtTz4G2Mj2U22S2TDhawS2o"
 client = genai.Client(api_key=GEMINI_API_KEY)
@@ -54,8 +55,23 @@ Profiles:
 
 Return a JSON array of objects with keys: profile, score, explanation.
 """
-    resp = client.models.generate_content(model="gemini-2.5-flash-preview-04-17", contents=[prompt])
-    ranked = json.loads(strip_fences(resp.text))
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = client.models.generate_content(model="gemini-2.5-flash-preview-04-17", contents=[prompt])
+            try:
+                ranked = json.loads(strip_fences(resp.text))
+                if not isinstance(ranked, list):
+                    raise ValueError("Model did not return a list")
+                break  # Success
+            except Exception as parse_err:
+                logging.error(f"Failed to parse LLM response (attempt {attempt+1}): {resp.text}\nError: {parse_err}")
+                ranked = []
+        except Exception as llm_err:
+            logging.error(f"LLM call failed (attempt {attempt+1}): {llm_err}")
+            ranked = []
+        if attempt < max_retries - 1:
+            logging.info(f"Retrying ranking LLM call (attempt {attempt+2})...")
     return RankResponse(ranked=ranked)
 
 if __name__ == "__main__":

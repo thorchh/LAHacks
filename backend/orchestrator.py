@@ -44,14 +44,24 @@ def get_profiles(queries):
     print("Profiles:", all_profiles)
     return all_profiles
 
+def batch_profiles(profiles, batch_size=20):
+    for i in range(0, len(profiles), batch_size):
+        yield profiles[i:i+batch_size]
+
 def rank_profiles(all_profiles, event_details):
-    print("[Ranking] Sending profiles to ranking agent...")
-    resp = requests.post(RANKING_URL, json={"profiles": all_profiles, "event_details": event_details})
-    ranked = resp.json()["ranked"]
-    print(f"[Ranking] Got {len(ranked)} ranked profiles.")
-    print("Ranked:", ranked)
-    print("[Ranking] Sorting profiles by score...")
-    return ranked
+    print("[Ranking] Sending profiles to ranking agent in batches...")
+    all_ranked = []
+    batch_size = 20
+    for batch in batch_profiles(all_profiles, batch_size):
+        resp = requests.post(RANKING_URL, json={"profiles": batch, "event_details": event_details})
+        try:
+            ranked = resp.json().get("ranked", [])
+            print(f"[Ranking] Got {len(ranked)} ranked profiles in batch.")
+            all_ranked.extend(ranked)
+        except Exception as e:
+            print(f"[Ranking] Error parsing ranking response: {e}")
+    print(f"[Ranking] Total ranked profiles: {len(all_ranked)}")
+    return all_ranked
 
 def outreach_top_leads(ranked, event_details, top_n=5):
     messages = []

@@ -44,12 +44,12 @@ Create 6-8 diverse, creative, and realistic search queries (as a JSON array of s
 @agent.on_rest_post("/api/queries", QueriesRequest, QueriesResponse)
 async def rest_queries(ctx: Context, req: QueriesRequest) -> QueriesResponse:
     prompt = f"""
-You are an expert in deep research and people discovery for high-profile events. Your job is to reverse engineer the event into the ideal types of speakers and panelists, then craft highly effective, realistic, and creative search queries to find them. For each event, think about:
-- What kind of person would be the dream speaker or panelist? (e.g., a tenured professor in AI ethics, a published author on AI policy, a CTO at a top AI company, a government advisor on AI regulation, a climate tech CEO, a sustainability officer, a biotech founder, a public health leader, a fintech innovator, a renowned artist, a best-selling author, a Nobel laureate, a startup founder, a city mayor, a chief medical officer, etc.)
+You are an expert in writing NATURAL LANGUAGE QUERIES for deep research and people discovery for high-profile events. Your job is to reverse engineer the event into the ideal types of speakers and panelists, then craft highly effective, realistic, and creative search queries to find them. For each event, think about:
+- What kind of person would be the dream speaker or panelist? (e.g., a tenured professor in AI ethics, a published author on AI policy, a CTO at a top AI company, a government advisor on AI regulation, a climate tech CEO, a biotech founder, a public health leader, a fintech innovator, a renowned artist, a best-selling author, a startup founder, a city mayor, a chief medical officer, etc.)
 - What backgrounds, achievements, or affiliations would make someone a perfect fit?
 - What search queries would surface these people on LinkedIn or Google?
 
-Unless the event specifically targets undergraduate students, avoid queries that would return undergraduates or entry-level professionals. Focus on queries that surface established professionals, senior researchers, executives, and thought leaders.
+Unless the event specifically targets undergraduate students, avoid queries that would return undergraduates or entry-level professionals. Focus on queries that surface established professionals, senior researchers, executives, and thought leaders. Do not crowd the queries with too many keywords or generic terms. Do NOT use generic phrases like "for this event", "for UCLA event", or mention the event itself. Do NOT use boolean logic, SQL, AND/OR, or put platform names like "LinkedIn" at the front of the query. Instead, focus on the type of person and their background, role, or achievement.
 
 Given the following event details and related keywords:
 
@@ -59,29 +59,17 @@ Event details:
 Keywords:
 {json.dumps(req.keywords, indent=2)}
 
-Create 6-8 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find high-caliber people. Do NOT use SQL or boolean logic like AND/OR. Make the queries sound like what a real event organizer would search for to find top speakers or panelists.
+Create 6-8 diverse, creative, and realistic search queries (as a JSON array of strings) that someone would type into a search engine or LinkedIn to find high-caliber people. Make the queries sound like what a real event organizer would search for to find top speakers or panelists.
 
 Here are some examples of excellent queries:
-- "Keynote speaker AI ethics conference published author"
-- "CTO artificial intelligence company public speaker"
-- "Professor machine learning ethics Stanford invited talks"
-- "Director responsible AI Google panelist experience"
-- "Government advisor AI policy conference speaker"
-- "Research scientist AI fairness DeepMind invited lectures"
-- "Author book on AI and society keynote events"
-- "Panelist AI regulation United Nations summit"
-- "CEO climate tech startup demo day speaker"
-- "Sustainability officer city government climate conference"
-- "Founder biotech company public health summit panelist"
-- "Fintech innovation leader blockchain conference keynote"
-- "Urban planning expert smart cities symposium speaker"
-- "Healthcare AI entrepreneur digital health event panelist"
-- "Nobel laureate chemistry keynote science festival"
-- "Best-selling author creative writing workshop guest"
-- "Renowned artist contemporary art biennale panelist"
-- "City mayor smart mobility summit keynote"
-- "Chief medical officer pandemic response conference speaker"
-- "Startup founder fintech innovation summit panelist"
+- "AI research lead at top tech company"
+- "Founder of successful Web3 startup"
+- "PhD in computer science working at Google or Meta"
+- "Venture capital partner investing in climate tech"
+- "Autonomous vehicle engineer with published patents"
+- "Biotech entrepreneur in San Francisco Bay Area"
+- "Award-winning science communicator and author"
+- "Healthcare AI startup CEO in California"
 
 Now, create the best possible queries for this event:
 """

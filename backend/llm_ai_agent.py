@@ -33,6 +33,14 @@ class RefineQueriesRequest(Model):
 class RefineQueriesResponse(Model):
     queries: list = Field(description="Improved queries.")
 
+
+agent = Agent(
+    name="llm_ai_agent",
+    seed="llm_ai_agent_seed",
+    port=8007,
+    endpoint=["http://localhost:8007/submit"]
+)
+
 @agent.on_rest_post("/api/quality_check", QualityCheckRequest, QualityCheckResponse)
 async def rest_quality_check(ctx: Context, req: QualityCheckRequest) -> QualityCheckResponse:
     prompt = f"""

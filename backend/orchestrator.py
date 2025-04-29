@@ -5,6 +5,7 @@ QUERIES_URL = "http://localhost:8002/api/queries"
 LINKD_URL = "http://localhost:8003/api/linkd"
 RANKING_URL = "http://localhost:8004/api/ranking"
 OUTREACH_URL = "http://localhost:8006/api/outreach"
+LLM_AI_URL = "http://localhost:8007"
 
 event_details = {
     "name": "UCLA AI & Ethics Symposium",
@@ -37,7 +38,7 @@ def get_profiles(queries):
     # Set this to True to only use the first query, or False to use all queries
     ONLY_FIRST_QUERY = True  # <-- Set to True to only process the first query
     if ONLY_FIRST_QUERY:
-        queries = queries[:1]
+        queries = queries[:2]
     for i, query in enumerate(queries):
         print(f"[Linkd] Sending query {i+1}/{len(queries)}: {query}")
         resp = requests.post(LINKD_URL, json={"query": query})
@@ -82,6 +83,40 @@ def outreach_top_leads(ranked, event_details, top_n=5):
         print(f"Outreach message for {profile.get('name', '[no name]')}\n{outreach_msg}\n")
         messages.append({"profile": profile, "message": outreach_msg})
     return messages
+
+# possible call to deep_research_pipeline
+def deep_research_pipeline(event_details, max_rounds=3):
+    keywords = get_keywords(event_details)
+    queries = get_queries(event_details, keywords)
+    round_num = 1
+    for _ in range(max_rounds):
+        print(f"\n[Deep Research] Round {round_num}: Running queries and collecting profiles...")
+        profiles = get_profiles(queries)
+        ranked = rank_profiles(profiles, event_details)
+        # Quality check
+        qc_resp = requests.post(f"{LLM_AI_URL}/api/quality_check", json={
+            "event_details": event_details,
+            "queries": queries,
+            "profiles": profiles
+        })
+        qc = qc_resp.json()
+        print(f"[Deep Research] Quality check: high_quality={qc.get('is_high_quality')}, issues={qc.get('issues')}")
+        if qc.get("is_high_quality"):
+            print("[Deep Research] Profiles are high quality. Proceeding to outreach.")
+            return ranked
+        # Refine queries if not high quality
+        print("[Deep Research] Refining queries based on issues...")
+        refine_resp = requests.post(f"{LLM_AI_URL}/api/refine_queries", json={
+            "event_details": event_details,
+            "keywords": keywords,
+            "previous_queries": queries,
+            "profiles": profiles,
+            "issues": qc.get("issues", "")
+        })
+        queries = refine_resp.json().get("queries", queries)
+        round_num += 1
+    print("[Deep Research] Max rounds reached. Returning last ranked results.")
+    return ranked
 
 # --- Flask API for orchestration ---
 from flask import Flask, request, jsonify
@@ -143,6 +178,32 @@ def api_outreach():
             "explanation": explanation
         })
         return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/quality_check", methods=["POST"])
+def api_quality_check():
+    try:
+        resp = requests.post(f"{LLM_AI_URL}/api/quality_check", json=request.json)
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/refine_queries", methods=["POST"])
+def api_refine_queries():
+    try:
+        resp = requests.post(f"{LLM_AI_URL}/api/refine_queries", json=request.json)
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# won't really be used
+@app.route("/api/deep_research", methods=["POST"])
+def api_deep_research():
+    try:
+        ed = request.json.get("event_details") or get_sample_event_details()
+        results = deep_research_pipeline(ed)
+        return jsonify({"ranked": results})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

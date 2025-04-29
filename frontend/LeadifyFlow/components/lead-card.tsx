@@ -83,10 +83,15 @@ export function LeadCard({ lead, type, view = "grid" }: LeadCardProps) {
             </div>
 
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-8">
+              <a
+                href={lead.linkedinUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700"
+              >
                 <Linkedin size={14} className="mr-1" />
                 Profile
-              </Button>
+              </a>
               <Button className="bg-blue-600 hover:bg-blue-700" size="sm" onClick={copyMessage} disabled={copied}>
                 {copied ? <Check size={14} className="mr-1" /> : <Copy size={14} className="mr-1" />}
                 {copied ? "Copied" : "Message"}

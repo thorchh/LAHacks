@@ -1,6 +1,7 @@
 import { ProcessStage } from "@/lib/types"
 import { Progress } from "@/components/ui/progress"
 import { Loader2, Search, Database, BarChart4, CheckCircle2 } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 interface LoadingIndicatorProps {
   stage: ProcessStage
@@ -8,6 +9,27 @@ interface LoadingIndicatorProps {
 }
 
 export function LoadingIndicator({ stage, progress }: LoadingIndicatorProps) {
+  // Animated progress bar that loops a gradient until complete
+  const [animatedProgress, setAnimatedProgress] = useState(progress)
+  const [stripeOffset, setStripeOffset] = useState(0)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (progress >= 100) {
+      setAnimatedProgress(100)
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      return
+    }
+    setAnimatedProgress(progress)
+    if (intervalRef.current) clearInterval(intervalRef.current)
+    intervalRef.current = setInterval(() => {
+      setStripeOffset((prev) => (prev + 4) % 100)
+    }, 30)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [progress])
+
   const getStageInfo = () => {
     switch (stage) {
       case ProcessStage.KeywordExtraction:
@@ -54,9 +76,7 @@ export function LoadingIndicator({ stage, progress }: LoadingIndicatorProps) {
         }
     }
   }
-
   const { icon, title, description } = getStageInfo()
-
   return (
     <div className="space-y-3">
       <div className="flex items-center">
@@ -64,8 +84,20 @@ export function LoadingIndicator({ stage, progress }: LoadingIndicatorProps) {
         <span className="font-medium">{title}</span>
       </div>
       <p className="text-sm text-slate-600">{description}</p>
-      <Progress value={progress} className="h-2" />
-      <p className="text-xs text-right text-slate-500">{progress}% complete</p>
+      <div className="relative h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+        <div
+          className="absolute top-0 left-0 h-full rounded-full"
+          style={{
+            width: `${animatedProgress}%`,
+            background: progress < 100
+              ? `repeating-linear-gradient(90deg, #3b82f6 0 20px, #2563eb 20px 40px)`
+              : '#22c55e',
+            backgroundPosition: progress < 100 ? `${stripeOffset}px 0` : undefined,
+            transition: progress >= 100 ? 'background 0.5s, width 0.5s' : 'width 0.2s',
+          }}
+        />
+      </div>
+      <p className="text-xs text-right text-slate-500">{Math.round(animatedProgress)}% complete</p>
     </div>
   )
 }

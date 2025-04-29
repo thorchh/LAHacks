@@ -22,6 +22,54 @@ import {
 import { mockEventData, mockAudience, mockGoals } from "@/lib/mock-data"
 import { useToast } from "@/components/ui/use-toast"
 
+// Gemini event intake using GoogleGenAI directly
+import { GoogleGenAI } from "@google/genai"
+
+const ai = new GoogleGenAI({ apiKey: "AIzaSyDOKIJlSe93VtTz4G2Mj2U22S2TDhawS2o" })
+
+const geminiDirectEventIntake = async (currentEventData: EventData) => {
+  let missingFields = [
+    'name', 'date', 'time', 'location', 'type', 'expectedAttendance', 'topics', 'description'
+  ]
+  let prompt = `Let's collect your event details. Please provide the following information: event name, date, time, location, type, expected attendance, topics, and a short description. I'll keep asking until I have all the details.`
+  let done = false
+  while (!done) {
+    // Call Gemini directly using GoogleGenAI
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { text: `Current event data: ${JSON.stringify(currentEventData)}` }
+          ]
+        }
+      ]
+    })
+    // Assume response.text is a JSON string with eventData
+    let data: any = {}
+    try {
+      data = JSON.parse(response.text)
+    } catch {
+      // fallback: try to extract fields from plain text
+      data = {}
+    }
+    currentEventData = { ...currentEventData, ...data.eventData }
+    missingFields = missingFields.filter(f => {
+      if (f === 'topics') return !Array.isArray(currentEventData.topics) || currentEventData.topics.length === 0
+      return !currentEventData[f] || (typeof currentEventData[f] === 'string' && !currentEventData[f].trim())
+    })
+    if (missingFields.length === 0) {
+      done = true
+    } else {
+      prompt = `I still need: ${missingFields.join(', ')}. Please provide these details.`
+    }
+  }
+  setEventData(currentEventData)
+  return currentEventData
+}
+
 export default function Home() {
   const { toast } = useToast()
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -195,7 +243,10 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_details: eventData }),
     })
+    setProcessStatus({ stage: ProcessStage.KeywordExtraction, progress: 50 })
     const keywords = await keywordsRes.json()
+    setProcessStatus({ stage: ProcessStage.KeywordExtraction, progress: 100 })
+
     setProcessStatus({ stage: ProcessStage.QueryGeneration, progress: 0 })
     // 2. Get queries
     const queriesRes = await fetch("/api/queries", {
@@ -203,15 +254,59 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_details: eventData, keywords }),
     })
+    setProcessStatus({ stage: ProcessStage.QueryGeneration, progress: 50 })
     const queries = await queriesRes.json()
+    setProcessStatus({ stage: ProcessStage.QueryGeneration, progress: 100 })
+
     setProcessStatus({ stage: ProcessStage.ProfileSearch, progress: 0 })
     // 3. Get profiles
+    let bestQueries = queries.queries
+    let maxRefineTries = 2
+    for (let attempt = 0; attempt < maxRefineTries; attempt++) {
+      // Use only 1 query for quick quality check
+      const linkdRes = await fetch("/api/linkd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ queries: bestQueries.slice(0, 1) }),
+      })
+      const profiles = await linkdRes.json()
+      // Call quality check
+      const qcRes = await fetch("/api/quality_check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_details: eventData,
+          queries: bestQueries,
+          profiles: profiles.profiles,
+        }),
+      })
+      const qc = await qcRes.json()
+      if (qc.is_high_quality) break
+      // Refine queries if not high quality
+      const refineRes = await fetch("/api/refine_queries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_details: eventData,
+          keywords,
+          previous_queries: bestQueries,
+          profiles: profiles.profiles,
+          issues: qc.issues || "",
+        }),
+      })
+      const refined = await refineRes.json()
+      bestQueries = refined.queries || bestQueries
+    }
+    // Now use bestQueries for the main /api/linkd call
     const linkdRes = await fetch("/api/linkd", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ queries: queries.queries }),
+      body: JSON.stringify({ queries: bestQueries }),
     })
+    setProcessStatus({ stage: ProcessStage.ProfileSearch, progress: 50 })
     const profiles = await linkdRes.json()
+    setProcessStatus({ stage: ProcessStage.ProfileSearch, progress: 100 })
+
     setProcessStatus({ stage: ProcessStage.ProfileRanking, progress: 0 })
     // 4. Get ranking
     const rankingRes = await fetch("/api/ranking", {
@@ -219,10 +314,12 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ profiles: profiles.profiles, event_details: eventData }),
     })
+    setProcessStatus({ stage: ProcessStage.ProfileRanking, progress: 50 })
     const ranked = await rankingRes.json()
+    setProcessStatus({ stage: ProcessStage.ProfileRanking, progress: 100 })
+
     setProcessStatus({ stage: ProcessStage.OutreachGeneration, progress: 0 })
     // 5. All leads are treated as speakers for now
-    // Batch the outreach agent calls in groups of 20
     function chunkArray<T>(arr: T[], size: number): T[][] {
       const result: T[][] = [];
       for (let i = 0; i < arr.length; i += size) {
@@ -245,7 +342,8 @@ export default function Home() {
     }))
     const leadChunks = chunkArray(leadObjs, 20)
     let allDrafts: string[] = []
-    for (const chunk of leadChunks) {
+    for (let i = 0; i < leadChunks.length; i++) {
+      const chunk = leadChunks[i]
       try {
         const outreachRes = await fetch('/api/outreach', {
           method: 'POST',
@@ -253,11 +351,12 @@ export default function Home() {
           body: JSON.stringify({ profiles: chunk, event_details: eventData }),
         })
         const outreachData = await outreachRes.json()
-        // outreachData should be { messages: string[] }
         allDrafts = allDrafts.concat(outreachData.messages || [])
       } catch (e) {
         allDrafts = allDrafts.concat(chunk.map(l => l.explanation || ''))
       }
+      // Update progress after each batch
+      setProcessStatus({ stage: ProcessStage.OutreachGeneration, progress: Math.round(((i + 1) / leadChunks.length) * 100) })
     }
     const speakers = leadObjs.map((lead, i) => ({ ...lead, draftMessage: allDrafts[i] || lead.explanation || '' }))
     setLeads({ speakers, sponsors: [] })
@@ -423,7 +522,7 @@ export default function Home() {
                 {showLeads && activeTab !== "conversation" && (
                   <div className="flex items-center text-sm text-slate-500 bg-white px-3 py-1 rounded-full border border-blue-100">
                     <span>
-                      {leads.speakers.length + leads.sponsors.length} leads found for {eventData.name}
+                      {leads.speakers.length + leads.sponsors.length} leads found
                     </span>
                   </div>
                 )}

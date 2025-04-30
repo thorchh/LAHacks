@@ -4,6 +4,9 @@
 
 Welcome to Leadify Flow – your all-in-one platform for finding the perfect speakers, sponsors, and more for your next event. Powered by cutting-edge LLMs, iterative deep research agents, and a seamless Next.js frontend, Leadify Flow takes the guesswork out of event outreach.
 
+![image](https://github.com/user-attachments/assets/42860cb3-9421-4df8-b7d5-c3393acd2613)
+
+
 ---
 
 ## ✨ Features
@@ -16,14 +19,6 @@ Welcome to Leadify Flow – your all-in-one platform for finding the perfect spe
 
 ---
 
-## 🛠️ Tech Stack
-
-- **Frontend:** Next.js, React, Tailwind CSS
-- **Backend:** Python, Flask, uAgents, Google Gemini LLM
-- **Agents:** Modular microservices for keywords, queries, ranking, outreach, and more
-
----
-
 ## 🧠 How It Works
 
 1. **Describe your event** in natural language.
@@ -31,6 +26,15 @@ Welcome to Leadify Flow – your all-in-one platform for finding the perfect spe
 3. **Deep research loop** refines queries for the best possible leads.
 4. **Profiles are ranked** and outreach messages are generated.
 5. **You get a curated list** of speakers and sponsors, ready to contact.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend:** Next.js, React, Tailwind CSS
+- **Backend:** Python, Flask, uAgents, Google Gemini LLM, Linkd API
+- **Agents:** Modular microservices for keywords, queries, ranking, outreach, and more
+![Screenshot 2025-04-30 at 10 31 48 AM](https://github.com/user-attachments/assets/7aa4f49a-e0aa-4600-b5c8-5d5a812c7c41)
 
 ---
 
